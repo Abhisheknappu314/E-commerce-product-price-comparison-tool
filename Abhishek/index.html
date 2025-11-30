@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Price Comparison Tool</title>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    .product-card {
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .product-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+    
+    .price-tag {
+      font-weight: 700;
+      font-size: 1.5rem;
+    }
+    
+    .best-price {
+      border: 2px solid #10b981;
+      position: relative;
+    }
+    
+    .best-price::before {
+      content: "Best Price";
+      position: absolute;
+      top: -12px;
+      right: 12px;
+      background: #10b981;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    
+    .filter-chip {
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .filter-chip:hover {
+      transform: scale(1.05);
+    }
+    
+    .filter-chip.active {
+      font-weight: 600;
+    }
+
+    .favorite-btn {
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .favorite-btn:hover {
+      transform: scale(1.2);
+    }
+
+    .notes-textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .modal-backdrop {
+      background: rgba(0, 0, 0, 0.5);
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="w-full min-h-full">
+  <div class="w-full min-h-full" style="background: linear-gradient(135deg, #504e9e 0%, #ffc400 100%);">
+   <div class="w-full" style="max-width: 1200px; margin: 0 auto; padding: 48px 24px;"><!-- Header -->
+    <div class="text-center mb-12">
+     <h1 id="main-title" class="text-white mb-3" style="font-size: 3rem; font-weight: 800;">Price comparison Tool</h1>
+     <p id="subtitle" class="text-white" style="font-size: 1.25rem; opacity: 0.9;">Find the best deals across Amazon, Flipkart, Myntra &amp; Meesho</p>
+    </div><!-- Search Bar -->
+    <div class="mb-8 bg-white rounded-2xl shadow-lg p-3">
+     <form id="search-form" class="flex gap-2"><label for="search-input" class="sr-only">Search products</label> <input type="text" id="search-input" placeholder="Search for products..." class="flex-1 px-6 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none" style="font-size: 1rem;"> <button type="submit" id="search-btn" class="px-8 py-3 rounded-xl text-white font-semibold" style="background: #667eea;"> 🔍 Search </button>
+     </form>
+    </div><!-- Filters -->
+    <div class="mb-8 flex gap-3 flex-wrap"><button class="filter-chip active px-6 py-2 bg-white rounded-full shadow" data-category="all"> All Products </button> <button class="filter-chip px-6 py-2 bg-white rounded-full shadow" data-category="favorites"> ⭐ Favorites </button> <button class="filter-chip px-6 py-2 bg-white rounded-full shadow" data-category="Electronics"> 📱 Electronics </button> <button class="filter-chip px-6 py-2 bg-white rounded-full shadow" data-category="Fashion"> 👕 Fashion </button> <button class="filter-chip px-6 py-2 bg-white rounded-full shadow" data-category="Home"> 🏠 Home </button> <button class="filter-chip px-6 py-2 bg-white rounded-full shadow" data-category="Books"> 📚 Books </button>
+    </div><!-- Products Grid -->
+    <div id="products-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"><!-- Products will be rendered here -->
+    </div><!-- No Results Message -->
+    <div id="no-results" class="hidden text-center py-12">
+     <div class="text-6xl mb-4">
+      🔍
+     </div>
+     <h3 class="text-white text-2xl font-bold mb-2">No products found</h3>
+     <p class="text-white opacity-80">Try a different search term or category</p>
+    </div>
+   </div>
+  </div><!-- Notes Modal -->
+  <div id="notes-modal" class="hidden fixed inset-0 modal-backdrop" style="z-index: 1000;">
+   <div class="flex items-center justify-center" style="min-height: 100%; padding: 20px;">
+    <div class="bg-white rounded-2xl shadow-2xl" style="max-width: 500px; width: 100%; padding: 32px;">
+     <h2 id="modal-title" class="text-2xl font-bold mb-4">Add Notes</h2>
+     <form id="notes-form"><label for="notes-input" class="block text-sm font-semibold mb-2">Your Notes:</label> <textarea id="notes-input" class="notes-textarea w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none" placeholder="Add your notes about this product..."></textarea>
+      <div class="flex gap-3 mt-6"><button type="submit" id="save-notes-btn" class="flex-1 px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700"> Save Notes </button> <button type="button" id="cancel-notes-btn" class="flex-1 px-6 py-3 bg-gray-200 text-gray-800 rounded-xl font-semibold hover:bg-gray-300"> Cancel </button>
+      </div>
+     </form>
+    </div>
+   </div>
+  </div>
+  <script>
+    // Sample product data with prices from Amazon, Flipkart, Myntra, and Meesho
+    const products = [
+      {
+        id: 1,
+        name: "iPhone 15 Pro Max",
+        category: "Electronics",
+        image: "iphon.jpeg",
+        amazon: { price: 134900, available: true, rating: 4.5 },
+        flipkart: { price: 132900, available: true, rating: 4.6 },
+        myntra: { price: 135900, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 2,
+        name: "Samsung Galaxy S24 Ultra",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=300&h=300&fit=crop",
+        amazon: { price: 124999, available: true, rating: 4.4 },
+        flipkart: { price: 121999, available: true, rating: 4.5 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 3,
+        name: "Sony WH-1000XM5 Headphones",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=300&h=300&fit=crop",
+        amazon: { price: 29990, available: true, rating: 4.7 },
+        flipkart: { price: 31990, available: true, rating: 4.6 },
+        myntra: { price: 30990, available: true, rating: 4.6 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 4,
+        name: "Nike Air Max Sneakers",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=300&h=300&fit=crop",
+        amazon: { price: 9995, available: true, rating: 4.3 },
+        flipkart: { price: 8995, available: true, rating: 4.4 },
+        myntra: { price: 8495, available: true, rating: 4.5 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 5,
+        name: "Levi's Denim Jacket",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=300&h=300&fit=crop",
+        amazon: { price: 3999, available: true, rating: 4.2 },
+        flipkart: { price: 3599, available: true, rating: 4.3 },
+        myntra: { price: 3299, available: true, rating: 4.4 },
+        meesho: { price: 2999, available: true, rating: 4.1 }
+      },
+      {
+        id: 6,
+        name: "Dell XPS 13 Laptop",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?w=300&h=300&fit=crop",
+        amazon: { price: 99990, available: true, rating: 4.6 },
+        flipkart: { price: 97990, available: true, rating: 4.5 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 7,
+        name: "Instant Pot Duo",
+        category: "Home",
+        image: "https://images.unsplash.com/photo-1585515320310-259814833e62?w=300&h=300&fit=crop",
+        amazon: { price: 8999, available: true, rating: 4.5 },
+        flipkart: { price: 9499, available: true, rating: 4.4 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 8499, available: true, rating: 4.3 }
+      },
+      {
+        id: 8,
+        name: "Dyson V12 Vacuum",
+        category: "Home",
+        image: "https://images.unsplash.com/photo-1558317374-067fb5f30001?w=300&h=300&fit=crop",
+        amazon: { price: 44990, available: true, rating: 4.6 },
+        flipkart: { price: 42990, available: true, rating: 4.5 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 9,
+        name: "The Psychology of Money",
+        category: "Books",
+        image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=300&h=300&fit=crop",
+        amazon: { price: 349, available: true, rating: 4.8 },
+        flipkart: { price: 299, available: true, rating: 4.7 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 10,
+        name: "Atomic Habits",
+        category: "Books",
+        image: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=300&h=300&fit=crop",
+        amazon: { price: 399, available: true, rating: 4.9 },
+        flipkart: { price: 349, available: true, rating: 4.8 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 11,
+        name: "Adidas Track Pants",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1506629082955-511b1aa562c8?w=300&h=300&fit=crop",
+        amazon: { price: 2499, available: true, rating: 4.1 },
+        flipkart: { price: 2299, available: true, rating: 4.2 },
+        myntra: { price: 1999, available: true, rating: 4.3 },
+        meesho: { price: 1799, available: true, rating: 4.0 }
+      },
+      {
+        id: 12,
+        name: "Philips Air Fryer",
+        category: "Home",
+        image: "water.jpeg",
+        amazon: { price: 7999, available: true, rating: 4.4 },
+        flipkart: { price: 7499, available: true, rating: 4.5 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 6999, available: true, rating: 4.3 }
+      },
+      {
+        id: 13,
+        name: "Apple Watch Series 9",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1434493789847-2f02dc6ca35d?w=300&h=300&fit=crop",
+        amazon: { price: 41900, available: true, rating: 4.6 },
+        flipkart: { price: 42900, available: true, rating: 4.5 },
+        myntra: { price: 43900, available: true, rating: 4.4 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 14,
+        name: "Canon EOS R6",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=300&h=300&fit=crop",
+        amazon: { price: 219990, available: true, rating: 4.7 },
+        flipkart: { price: 214990, available: true, rating: 4.6 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 15,
+        name: "Puma Running Shoes",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1608231387042-66d1773070a5?w=300&h=300&fit=crop",
+        amazon: { price: 4999, available: true, rating: 4.2 },
+        flipkart: { price: 4599, available: true, rating: 4.3 },
+        myntra: { price: 4299, available: true, rating: 4.4 },
+        meesho: { price: 3999, available: true, rating: 4.1 }
+      },
+      {
+        id: 16,
+        name: "Zara Formal Shirt",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=300&h=300&fit=crop",
+        amazon: { price: 2999, available: true, rating: 4.0 },
+        flipkart: { price: 2799, available: true, rating: 4.1 },
+        myntra: { price: 2499, available: true, rating: 4.2 },
+        meesho: { price: 2299, available: true, rating: 4.0 }
+      },
+      {
+        id: 17,
+        name: "LG 55\" 4K Smart TV",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=300&h=300&fit=crop",
+        amazon: { price: 54990, available: true, rating: 4.5 },
+        flipkart: { price: 52990, available: true, rating: 4.6 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 18,
+        name: "Havells Table Fan",
+        category: "Home",
+        image: "fan.jpeg",
+        amazon: { price: 2199, available: true, rating: 4.3 },
+        flipkart: { price: 1999, available: true, rating: 4.4 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 1799, available: true, rating: 4.2 }
+      },
+      {
+        id: 19,
+        name: "IKEA Study Desk",
+        category: "Home",
+        image: "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=300&h=300&fit=crop",
+        amazon: { price: 12999, available: true, rating: 4.4 },
+        flipkart: { price: 11999, available: true, rating: 4.3 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 20,
+        name: "Sapiens by Yuval Noah Harari",
+        category: "Books",
+        image: "https://images.unsplash.com/photo-1589998059171-988d887df646?w=300&h=300&fit=crop",
+        amazon: { price: 499, available: true, rating: 4.7 },
+        flipkart: { price: 449, available: true, rating: 4.8 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 21,
+        name: "H&M Cotton T-Shirt",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=300&h=300&fit=crop",
+        amazon: { price: 799, available: true, rating: 4.0 },
+        flipkart: { price: 699, available: true, rating: 4.1 },
+        myntra: { price: 599, available: true, rating: 4.2 },
+        meesho: { price: 499, available: true, rating: 4.3 }
+      },
+      {
+        id: 22,
+        name: "JBL Flip 6 Speaker",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=300&h=300&fit=crop",
+        amazon: { price: 11999, available: true, rating: 4.5 },
+        flipkart: { price: 11499, available: true, rating: 4.6 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 23,
+        name: "Prestige Pressure Cooker",
+        category: "Home",
+        image: "co.jpeg",
+        amazon: { price: 2499, available: true, rating: 4.6 },
+        flipkart: { price: 2299, available: true, rating: 4.5 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 1999, available: true, rating: 4.4 }
+      },
+      {
+        id: 24,
+        name: "Ray-Ban Aviator Sunglasses",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=300&h=300&fit=crop",
+        amazon: { price: 7999, available: true, rating: 4.4 },
+        flipkart: { price: 7599, available: true, rating: 4.3 },
+        myntra: { price: 7299, available: true, rating: 4.5 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 25,
+        name: "OnePlus Nord 3",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=300&h=300&fit=crop",
+        amazon: { price: 33999, available: true, rating: 4.3 },
+        flipkart: { price: 32999, available: true, rating: 4.4 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 32499, available: true, rating: 4.2 }
+      },
+      {
+        id: 26,
+        name: "Rich Dad Poor Dad",
+        category: "Books",
+        image: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=300&h=300&fit=crop",
+        amazon: { price: 299, available: true, rating: 4.6 },
+        flipkart: { price: 249, available: true, rating: 4.7 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 27,
+        name: "Milton Water Bottle",
+        category: "Home",
+        image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=300&h=300&fit=crop",
+        amazon: { price: 499, available: true, rating: 4.3 },
+        flipkart: { price: 449, available: true, rating: 4.4 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 399, available: true, rating: 4.5 }
+      },
+      {
+        id: 28,
+        name: "Reebok Gym Bag",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=300&h=300&fit=crop",
+        amazon: { price: 1499, available: true, rating: 4.2 },
+        flipkart: { price: 1399, available: true, rating: 4.3 },
+        myntra: { price: 1299, available: true, rating: 4.4 },
+        meesho: { price: 1199, available: true, rating: 4.1 }
+      },
+      {
+        id: 29,
+        name: "Boat Smartwatch",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=300&h=300&fit=crop",
+        amazon: { price: 4999, available: true, rating: 4.1 },
+        flipkart: { price: 4599, available: true, rating: 4.2 },
+        myntra: { price: 4799, available: true, rating: 4.0 },
+        meesho: { price: 4399, available: true, rating: 4.3 }
+      },
+      {
+        id: 30,
+        name: "Cello Water Purifier",
+        category: "Home",
+        image: "https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?w=300&h=300&fit=crop",
+        amazon: { price: 15999, available: true, rating: 4.4 },
+        flipkart: { price: 14999, available: true, rating: 4.5 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 14499, available: true, rating: 4.3 }
+      },
+      {
+        id: 31,
+        name: "Woodland Leather Wallet",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1627123424574-724758594e93?w=300&h=300&fit=crop",
+        amazon: { price: 899, available: true, rating: 4.2 },
+        flipkart: { price: 799, available: true, rating: 4.3 },
+        myntra: { price: 749, available: true, rating: 4.1 },
+        meesho: { price: 599, available: true, rating: 4.0 }
+      },
+      {
+        id: 32,
+        name: "Realme Narzo 60",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1598327105666-5b89351aff97?w=300&h=300&fit=crop",
+        amazon: { price: 17999, available: true, rating: 4.3 },
+        flipkart: { price: 17499, available: true, rating: 4.4 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 17299, available: true, rating: 4.2 }
+      },
+      {
+        id: 33,
+        name: "Ethnic Cotton Kurti",
+        category: "Fashion",
+        image: "papa.jpeg",
+        amazon: { price: 799, available: true, rating: 4.1 },
+        flipkart: { price: 699, available: true, rating: 4.2 },
+        myntra: { price: 649, available: true, rating: 4.0 },
+        meesho: { price: 499, available: true, rating: 4.3 }
+      },
+      {
+        id: 34,
+        name: "Bajaj Mixer Grinder",
+        category: "Home",
+        image: "https://images.unsplash.com/photo-1570222094114-d054a817e56b?w=300&h=300&fit=crop",
+        amazon: { price: 3499, available: true, rating: 4.4 },
+        flipkart: { price: 3299, available: true, rating: 4.5 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 3099, available: true, rating: 4.3 }
+      },
+      {
+        id: 35,
+        name: "The 5 AM Club",
+        category: "Books",
+        image: "https://images.unsplash.com/photo-1457369804613-52c61a468e7d?w=300&h=300&fit=crop",
+        amazon: { price: 449, available: true, rating: 4.6 },
+        flipkart: { price: 399, available: true, rating: 4.7 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 36,
+        name: "Titan Analog Watch",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=300&h=300&fit=crop",
+        amazon: { price: 4999, available: true, rating: 4.5 },
+        flipkart: { price: 4799, available: true, rating: 4.4 },
+        myntra: { price: 4599, available: true, rating: 4.6 },
+        meesho: { price: 0, available: false, rating: 0 }
+      },
+      {
+        id: 37,
+        name: "Xiaomi Smart Band 7",
+        category: "Electronics",
+        image: "https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=300&h=300&fit=crop",
+        amazon: { price: 2799, available: true, rating: 4.3 },
+        flipkart: { price: 2699, available: true, rating: 4.4 },
+        myntra: { price: 2899, available: true, rating: 4.2 },
+        meesho: { price: 2599, available: true, rating: 4.1 }
+      },
+      {
+        id: 38,
+        name: "Cotton Bedsheet Set",
+        category: "Home",
+        image: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=300&h=300&fit=crop",
+        amazon: { price: 1299, available: true, rating: 4.2 },
+        flipkart: { price: 1199, available: true, rating: 4.3 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 899, available: true, rating: 4.4 }
+      },
+      {
+        id: 39,
+        name: "Campus Sports Shoes",
+        category: "Fashion",
+        image: "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=300&h=300&fit=crop",
+        amazon: { price: 1999, available: true, rating: 4.0 },
+        flipkart: { price: 1799, available: true, rating: 4.1 },
+        myntra: { price: 1699, available: true, rating: 4.2 },
+        meesho: { price: 1499, available: true, rating: 4.3 }
+      },
+      {
+        id: 40,
+        name: "Pigeon Electric Kettle",
+        category: "Home",
+        image: "co.jpeg",
+        amazon: { price: 899, available: true, rating: 4.3 },
+        flipkart: { price: 849, available: true, rating: 4.4 },
+        myntra: { price: 0, available: false, rating: 0 },
+        meesho: { price: 799, available: true, rating: 4.2 }
+      }
+    ];
+
+    let currentCategory = 'all';
+    let searchTerm = '';
+    let userData = [];
+    let currentEditProductId = null;
+    let isLoading = false;
+
+    const defaultConfig = {
+      background_color: "#667eea",
+      surface_color: "#ffffff",
+      text_color: "#1f2937",
+      primary_action_color: "#667eea",
+      secondary_action_color: "#10b981",
+      font_family: "system-ui, -apple-system, sans-serif",
+      font_size: 16,
+      main_title: "Compare to  Price",
+      subtitle: "Find the best deals across Amazon, Flipkart, Myntra & Meesho",
+      search_placeholder: "Search for products..."
+    };
+
+    function formatPrice(price) {
+      return `₹${price.toLocaleString('en-IN')}`;
+    }
+
+    function getBestPrice(product) {
+      const prices = [];
+      if (product.amazon.available) prices.push({ platform: 'amazon', price: product.amazon.price });
+      if (product.flipkart.available) prices.push({ platform: 'flipkart', price: product.flipkart.price });
+      if (product.myntra.available) prices.push({ platform: 'myntra', price: product.myntra.price });
+      if (product.meesho.available) prices.push({ platform: 'meesho', price: product.meesho.price });
+      
+      if (prices.length === 0) return null;
+      return prices.reduce((min, curr) => curr.price < min.price ? curr : min);
+    }
+
+    function getUserDataForProduct(productId) {
+      return userData.find(item => item.product_id === String(productId));
+    }
+
+    function isFavorite(productId) {
+      const data = getUserDataForProduct(productId);
+      return data ? data.user_favorite : false;
+    }
+
+    async function toggleFavorite(productId) {
+      if (isLoading) return;
+
+      const existingData = getUserDataForProduct(productId);
+      
+      if (existingData) {
+        isLoading = true;
+        existingData.user_favorite = !existingData.user_favorite;
+        existingData.last_checked = new Date().toISOString();
+        const result = await window.dataSdk.update(existingData);
+        isLoading = false;
+        
+        if (result.isError) {
+          showNotification('Failed to update favorite. Please try again.');
+        }
+      } else {
+        if (userData.length >= 999) {
+          showNotification('Maximum limit of 999 products reached. Please remove some items first.');
+          return;
+        }
+        
+        isLoading = true;
+        const result = await window.dataSdk.create({
+          product_id: String(productId),
+          user_favorite: true,
+          notes: "",
+          last_checked: new Date().toISOString()
+        });
+        isLoading = false;
+        
+        if (result.isError) {
+          showNotification('Failed to add favorite. Please try again.');
+        }
+      }
+    }
+
+    function openNotesModal(productId) {
+      const product = products.find(p => p.id === productId);
+      if (!product) return;
+
+      currentEditProductId = productId;
+      const existingData = getUserDataForProduct(productId);
+      
+      document.getElementById('modal-title').textContent = `Notes for ${product.name}`;
+      document.getElementById('notes-input').value = existingData ? existingData.notes : '';
+      document.getElementById('notes-modal').classList.remove('hidden');
+    }
+
+    function closeNotesModal() {
+      document.getElementById('notes-modal').classList.add('hidden');
+      currentEditProductId = null;
+    }
+
+    async function saveNotes(e) {
+      e.preventDefault();
+      if (isLoading || !currentEditProductId) return;
+
+      const notes = document.getElementById('notes-input').value;
+      const existingData = getUserDataForProduct(currentEditProductId);
+
+      if (existingData) {
+        isLoading = true;
+        existingData.notes = notes;
+        existingData.last_checked = new Date().toISOString();
+        const result = await window.dataSdk.update(existingData);
+        isLoading = false;
+        
+        if (result.isOk) {
+          closeNotesModal();
+        } else {
+          showNotification('Failed to save notes. Please try again.');
+        }
+      } else {
+        if (userData.length >= 999) {
+          showNotification('Maximum limit of 999 products reached. Please remove some items first.');
+          return;
+        }
+        
+        isLoading = true;
+        const result = await window.dataSdk.create({
+          product_id: String(currentEditProductId),
+          user_favorite: false,
+          notes: notes,
+          last_checked: new Date().toISOString()
+        });
+        isLoading = false;
+        
+        if (result.isOk) {
+          closeNotesModal();
+        } else {
+          showNotification('Failed to save notes. Please try again.');
+        }
+      }
+    }
+
+    function showNotification(message) {
+      const notification = document.createElement('div');
+      notification.textContent = message;
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ef4444;
+        color: white;
+        padding: 16px 24px;
+        border-radius: 12px;
+        font-weight: 600;
+        z-index: 2000;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      `;
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.remove();
+      }, 3000);
+    }
+
+    function renderProducts() {
+      const grid = document.getElementById('products-grid');
+      const noResults = document.getElementById('no-results');
+      
+      let filtered = products.filter(product => {
+        const matchesSearch = searchTerm === '' || 
+          product.name.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        if (currentCategory === 'favorites') {
+          return matchesSearch && isFavorite(product.id);
+        }
+        
+        const matchesCategory = currentCategory === 'all' || product.category === currentCategory;
+        return matchesCategory && matchesSearch;
+      });
+
+      if (filtered.length === 0) {
+        grid.classList.add('hidden');
+        noResults.classList.remove('hidden');
+        return;
+      }
+
+      grid.classList.remove('hidden');
+      noResults.classList.add('hidden');
+
+      grid.innerHTML = filtered.map(product => {
+        const bestPrice = getBestPrice(product);
+        const favorite = isFavorite(product.id);
+        const productData = getUserDataForProduct(product.id);
+        const hasNotes = productData && productData.notes && productData.notes.trim() !== '';
+        
+        return `
+          <div class="product-card bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div class="p-6">
+              <div class="flex justify-between items-start mb-4">
+                <button class="favorite-btn text-3xl" data-product-id="${product.id}" ${isLoading ? 'disabled' : ''}>
+                  ${favorite ? '⭐' : '☆'}
+                </button>
+                <button class="text-2xl" onclick="window.openNotesModal(${product.id})" title="Add notes">
+                  ${hasNotes ? '📝' : '📄'}
+                </button>
+              </div>
+              
+              <div class="mb-4 rounded-xl overflow-hidden" style="height: 200px; background: #f3f4f6;">
+                <img src="${product.image}" alt="${product.name}" 
+                     style="width: 100%; height: 100%; object-fit: cover;"
+                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;font-size:4rem;\\'>📦</div>';">
+              </div>
+              
+              <h3 class="font-bold mb-4 text-center" style="font-size: 1.25rem; color: ${window.elementSdk?.config?.text_color || defaultConfig.text_color};">${product.name}</h3>
+              
+              ${hasNotes ? `
+              <div class="mb-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                <p class="text-sm text-gray-700 italic">"${productData.notes.substring(0, 80)}${productData.notes.length > 80 ? '...' : ''}"</p>
+              </div>
+              ` : ''}
+              
+              <!-- Amazon Price -->
+              <div class="mb-3 p-4 rounded-xl border-2 ${bestPrice?.platform === 'amazon' ? 'best-price' : ''}" style="border-color: #e5e7eb;">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="font-semibold" style="color: ${window.elementSdk?.config?.text_color || defaultConfig.text_color};">🛒 Amazon</span>
+                  <span class="text-yellow-500">${'⭐'.repeat(Math.floor(product.amazon.rating))} ${product.amazon.rating}</span>
+                </div>
+                <div class="price-tag" style="color: ${window.elementSdk?.config?.primary_action_color || defaultConfig.primary_action_color};">
+                  ${formatPrice(product.amazon.price)}
+                </div>
+                ${bestPrice && bestPrice.platform !== 'amazon' ? 
+                  `<div class="text-sm text-red-600 mt-1">+${formatPrice(product.amazon.price - bestPrice.price)} more</div>` : ''}
+              </div>
+              
+              <!-- Flipkart Price -->
+              <div class="mb-3 p-4 rounded-xl border-2 ${bestPrice?.platform === 'flipkart' ? 'best-price' : ''}" style="border-color: #e5e7eb;">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="font-semibold" style="color: ${window.elementSdk?.config?.text_color || defaultConfig.text_color};">🛍️ Flipkart</span>
+                  <span class="text-yellow-500">${'⭐'.repeat(Math.floor(product.flipkart.rating))} ${product.flipkart.rating}</span>
+                </div>
+                <div class="price-tag" style="color: ${window.elementSdk?.config?.primary_action_color || defaultConfig.primary_action_color};">
+                  ${formatPrice(product.flipkart.price)}
+                </div>
+                ${bestPrice && bestPrice.platform !== 'flipkart' ? 
+                  `<div class="text-sm text-red-600 mt-1">+${formatPrice(product.flipkart.price - bestPrice.price)} more</div>` : ''}
+              </div>
+              
+              <!-- Myntra Price -->
+              ${product.myntra.available ? `
+              <div class="mb-3 p-4 rounded-xl border-2 ${bestPrice?.platform === 'myntra' ? 'best-price' : ''}" style="border-color: #e5e7eb;">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="font-semibold" style="color: ${window.elementSdk?.config?.text_color || defaultConfig.text_color};">👗 Myntra</span>
+                  <span class="text-yellow-500">${'⭐'.repeat(Math.floor(product.myntra.rating))} ${product.myntra.rating}</span>
+                </div>
+                <div class="price-tag" style="color: ${window.elementSdk?.config?.primary_action_color || defaultConfig.primary_action_color};">
+                  ${formatPrice(product.myntra.price)}
+                </div>
+                ${bestPrice && bestPrice.platform !== 'myntra' ? 
+                  `<div class="text-sm text-red-600 mt-1">+${formatPrice(product.myntra.price - bestPrice.price)} more</div>` : ''}
+              </div>
+              ` : ''}
+
+              <!-- Meesho Price -->
+              ${product.meesho.available ? `
+              <div class="mb-4 p-4 rounded-xl border-2 ${bestPrice?.platform === 'meesho' ? 'best-price' : ''}" style="border-color: #e5e7eb;">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="font-semibold" style="color: ${window.elementSdk?.config?.text_color || defaultConfig.text_color};">🛒 Meesho</span>
+                  <span class="text-yellow-500">${'⭐'.repeat(Math.floor(product.meesho.rating))} ${product.meesho.rating}</span>
+                </div>
+                <div class="price-tag" style="color: ${window.elementSdk?.config?.primary_action_color || defaultConfig.primary_action_color};">
+                  ${formatPrice(product.meesho.price)}
+                </div>
+                ${bestPrice && bestPrice.platform !== 'meesho' ? 
+                  `<div class="text-sm text-red-600 mt-1">+${formatPrice(product.meesho.price - bestPrice.price)} more</div>` : ''}
+              </div>
+              ` : '<div class="mb-4"></div>'}
+              
+              <!-- Action Buttons -->
+              <div class="grid ${(() => {
+                let count = 2;
+                if (product.myntra.available) count++;
+                if (product.meesho.available) count++;
+                return `grid-cols-${count}`;
+              })()} gap-2">
+                <a href="https://amazon.in" target="_blank" rel="noopener noreferrer" 
+                   class="px-2 py-2 rounded-lg text-white text-center font-semibold"
+                   style="background: ${window.elementSdk?.config?.primary_action_color || defaultConfig.primary_action_color}; font-size: 0.7rem;">
+                  Amazon
+                </a>
+                <a href="https://flipkart.com" target="_blank" rel="noopener noreferrer"
+                   class="px-2 py-2 rounded-lg text-white text-center font-semibold"
+                   style="background: ${window.elementSdk?.config?.secondary_action_color || defaultConfig.secondary_action_color}; font-size: 0.7rem;">
+                  Flipkart
+                </a>
+                ${product.myntra.available ? `
+                <a href="https://myntra.com" target="_blank" rel="noopener noreferrer"
+                   class="px-2 py-2 rounded-lg text-white text-center font-semibold"
+                   style="background: #ff3f6c; font-size: 0.7rem;">
+                  Myntra
+                </a>
+                ` : ''}
+                ${product.meesho.available ? `
+                <a href="https://meesho.com" target="_blank" rel="noopener noreferrer"
+                   class="px-2 py-2 rounded-lg text-white text-center font-semibold"
+                   style="background: #9f2089; font-size: 0.7rem;">
+                  Meesho
+                </a>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Add event listeners for favorite buttons
+      document.querySelectorAll('.favorite-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const productId = parseInt(this.dataset.productId);
+          toggleFavorite(productId);
+        });
+      });
+    }
+
+    // Filter functionality
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.addEventListener('click', function() {
+        document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+        currentCategory = this.dataset.category;
+        renderProducts();
+      });
+    });
+
+    // Search functionality
+    document.getElementById('search-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      searchTerm = document.getElementById('search-input').value;
+      renderProducts();
+    });
+
+    // Modal functionality
+    window.openNotesModal = openNotesModal;
+    
+    document.getElementById('notes-form').addEventListener('submit', saveNotes);
+    
+    document.getElementById('cancel-notes-btn').addEventListener('click', closeNotesModal);
+    
+    document.getElementById('notes-modal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeNotesModal();
+      }
+    });
+
+    // Data SDK Integration
+    const dataHandler = {
+      onDataChanged(data) {
+        userData = data;
+        renderProducts();
+      }
+    };
+
+    // Element SDK Integration
+    async function onConfigChange(config) {
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseFontStack = 'system-ui, -apple-system, sans-serif';
+      const baseSize = config.font_size || defaultConfig.font_size;
+
+      document.body.style.fontFamily = `${customFont}, ${baseFontStack}`;
+      
+      const mainTitle = document.getElementById('main-title');
+      mainTitle.textContent = config.main_title || defaultConfig.main_title;
+      mainTitle.style.fontSize = `${baseSize * 3}px`;
+      mainTitle.style.fontFamily = `${customFont}, ${baseFontStack}`;
+      
+      const subtitle = document.getElementById('subtitle');
+      subtitle.textContent = config.subtitle || defaultConfig.subtitle;
+      subtitle.style.fontSize = `${baseSize * 1.25}px`;
+      subtitle.style.fontFamily = `${customFont}, ${baseFontStack}`;
+      
+      const searchInput = document.getElementById('search-input');
+      searchInput.placeholder = config.search_placeholder || defaultConfig.search_placeholder;
+      searchInput.style.fontSize = `${baseSize}px`;
+      searchInput.style.fontFamily = `${customFont}, ${baseFontStack}`;
+      
+      const searchBtn = document.getElementById('search-btn');
+      searchBtn.style.background = config.primary_action_color || defaultConfig.primary_action_color;
+      searchBtn.style.fontSize = `${baseSize}px`;
+      searchBtn.style.fontFamily = `${customFont}, ${baseFontStack}`;
+      
+      document.querySelector('.w-full.min-h-full > div').style.background = 
+        `linear-gradient(135deg, ${config.background_color || defaultConfig.background_color} 0%, #764ba2 100%)`;
+      
+      renderProducts();
+    }
+
+    // Initialize SDKs
+    async function initializeApp() {
+      if (window.dataSdk) {
+        const initResult = await window.dataSdk.init(dataHandler);
+        if (initResult.isError) {
+          console.error('Failed to initialize Data SDK');
+        }
+      }
+
+      if (window.elementSdk) {
+        window.elementSdk.init({
+          defaultConfig,
+          onConfigChange,
+          mapToCapabilities: (config) => ({
+            recolorables: [
+              {
+                get: () => config.background_color || defaultConfig.background_color,
+                set: (value) => {
+                  config.background_color = value;
+                  window.elementSdk.setConfig({ background_color: value });
+                }
+              },
+              {
+                get: () => config.surface_color || defaultConfig.surface_color,
+                set: (value) => {
+                  config.surface_color = value;
+                  window.elementSdk.setConfig({ surface_color: value });
+                }
+              },
+              {
+                get: () => config.text_color || defaultConfig.text_color,
+                set: (value) => {
+                  config.text_color = value;
+                  window.elementSdk.setConfig({ text_color: value });
+                }
+              },
+              {
+                get: () => config.primary_action_color || defaultConfig.primary_action_color,
+                set: (value) => {
+                  config.primary_action_color = value;
+                  window.elementSdk.setConfig({ primary_action_color: value });
+                }
+              },
+              {
+                get: () => config.secondary_action_color || defaultConfig.secondary_action_color,
+                set: (value) => {
+                  config.secondary_action_color = value;
+                  window.elementSdk.setConfig({ secondary_action_color: value });
+                }
+              }
+            ],
+            borderables: [],
+            fontEditable: {
+              get: () => config.font_family || defaultConfig.font_family,
+              set: (value) => {
+                config.font_family = value;
+                window.elementSdk.setConfig({ font_family: value });
+              }
+            },
+            fontSizeable: {
+              get: () => config.font_size || defaultConfig.font_size,
+              set: (value) => {
+                config.font_size = value;
+                window.elementSdk.setConfig({ font_size: value });
+              }
+            }
+          }),
+          mapToEditPanelValues: (config) => new Map([
+            ["main_title", config.main_title || defaultConfig.main_title],
+            ["subtitle", config.subtitle || defaultConfig.subtitle],
+            ["search_placeholder", config.search_placeholder || defaultConfig.search_placeholder]
+          ])
+        });
+      }
+
+      // Initial render
+      renderProducts();
+    }
+
+    initializeApp();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9a6960079524c464',t:'MTc2NDQ5NTU0MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
